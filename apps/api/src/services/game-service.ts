@@ -1,0 +1,196 @@
+import { Chess } from "chess.js";
+import { GameStatus, prisma } from "@repo/db";
+import type {
+    GameDto,
+    GameStateUpdatePayload,
+    MoveDto,
+} from "@repo/types";
+import { AppError } from "../utils/app-error.js";
+
+const toGameDto = (game: {
+    id: string;
+    whitePlayerId: string;
+    blackPlayerId: string | null;
+    status: GameStatus;
+    fenPosition: string;
+    createdAt: Date;
+}): GameDto => ({
+    ...game,
+    createdAt: game.createdAt.toISOString(),
+});
+
+const toMoveDto = (move: {
+    id: string;
+    gameId: string;
+    playerId: string;
+    move: string;
+    createdAt: Date;
+}): MoveDto => ({
+    ...move,
+    createdAt: move.createdAt.toISOString(),
+});
+
+const toStatePayload = (game: {
+    id: string;
+    whitePlayerId: string;
+    blackPlayerId: string | null;
+    status: GameStatus;
+    fenPosition: string;
+}): GameStateUpdatePayload => {
+    const chess = new Chess(game.fenPosition);
+
+    return {
+        gameId: game.id,
+        fenPosition: game.fenPosition,
+        status: game.status,
+        whitePlayerId: game.whitePlayerId,
+        blackPlayerId: game.blackPlayerId,
+        turn: chess.turn(),
+        isCheck: chess.inCheck(),
+        isCheckmate: chess.isCheckmate(),
+        isDraw: chess.isDraw(),
+    };
+};
+
+export const gameService = {
+    async listJoinableGames() {
+        const games = await prisma.game.findMany({
+            where: { status: GameStatus.waiting },
+            orderBy: { createdAt: "desc" },
+            take: 50,
+        });
+
+        return games.map(toGameDto);
+    },
+
+    async createGame(whitePlayerId: string) {
+        const chess = new Chess();
+        const game = await prisma.game.create({
+            data: {
+                whitePlayerId,
+                fenPosition: chess.fen(),
+                status: GameStatus.waiting,
+            },
+        });
+
+        return toGameDto(game);
+    },
+
+    async joinGame(gameId: string, userId: string) {
+        const game = await prisma.game.findUnique({ where: { id: gameId } });
+
+        if (!game) {
+            throw new AppError("Game not found", 404);
+        }
+
+        if (game.blackPlayerId && game.blackPlayerId !== userId) {
+            throw new AppError("Game already has two players", 409);
+        }
+
+        if (game.whitePlayerId === userId || game.blackPlayerId === userId) {
+            return toGameDto(game);
+        }
+
+        const updated = await prisma.game.update({
+            where: { id: gameId },
+            data: {
+                blackPlayerId: userId,
+                status: GameStatus.active,
+            },
+        });
+
+        return toGameDto(updated);
+    },
+
+    async getGame(gameId: string) {
+        const game = await prisma.game.findUnique({
+            where: { id: gameId },
+            include: {
+                moves: {
+                    orderBy: { createdAt: "asc" },
+                },
+            },
+        });
+
+        if (!game) {
+            throw new AppError("Game not found", 404);
+        }
+
+        return {
+            game: toGameDto(game),
+            moves: game.moves.map(toMoveDto),
+        };
+    },
+
+    async makeMove(input: {
+        gameId: string;
+        userId: string;
+        from: string;
+        to: string;
+        promotion?: "q" | "r" | "b" | "n";
+    }) {
+        const game = await prisma.game.findUnique({ where: { id: input.gameId } });
+
+        if (!game) {
+            throw new AppError("Game not found", 404);
+        }
+
+        if (!game.blackPlayerId || game.status === GameStatus.waiting) {
+            throw new AppError("Cannot make moves until another player joins", 400);
+        }
+
+        const chess = new Chess(game.fenPosition);
+        const movingColor = chess.turn();
+
+        const expectedPlayerId =
+            movingColor === "w" ? game.whitePlayerId : game.blackPlayerId;
+
+        if (expectedPlayerId !== input.userId) {
+            throw new AppError("It is not your turn", 403);
+        }
+
+        const result = chess.move({
+            from: input.from,
+            to: input.to,
+            promotion: input.promotion,
+        });
+
+        if (!result) {
+            throw new AppError("Invalid chess move", 400);
+        }
+
+        const nextStatus = chess.isGameOver() ? GameStatus.finished : GameStatus.active;
+
+        const [updatedGame] = await prisma.$transaction([
+            prisma.game.update({
+                where: { id: game.id },
+                data: {
+                    fenPosition: chess.fen(),
+                    status: nextStatus,
+                },
+            }),
+            prisma.move.create({
+                data: {
+                    gameId: game.id,
+                    playerId: input.userId,
+                    move: result.san,
+                },
+            }),
+        ]);
+
+        return {
+            ...toStatePayload(updatedGame),
+            lastMove: result.san,
+        };
+    },
+
+    toGameStatePayload(game: {
+        id: string;
+        whitePlayerId: string;
+        blackPlayerId: string | null;
+        status: GameStatus;
+        fenPosition: string;
+    }) {
+        return toStatePayload(game);
+    },
+};
