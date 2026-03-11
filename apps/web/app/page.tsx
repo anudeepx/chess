@@ -84,15 +84,16 @@ export default async function Home() {
             games.map((game) => (
               <div
                 key={game.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-800 px-3 py-2"
+                className="flex w-full items-center justify-between gap-3 rounded-md border border-zinc-800 px-3 py-2"
               >
-                <div className="text-sm text-zinc-300">
+                <div className="min-w-0 flex-1 text-sm text-zinc-300">
                   <p>Game: {game.id}</p>
                   <p className="text-zinc-500">
                     Created: {new Date(game.createdAt).toLocaleString()}
                   </p>
                 </div>
                 <form
+                  className="shrink-0"
                   action={async () => {
                     "use server";
                     await joinGame(session.user.id, game.id);

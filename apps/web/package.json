@@ -16,7 +16,7 @@
     "@repo/types": "workspace:*",
     "@repo/ui": "workspace:*",
     "chess.js": "^1.4.0",
-    "next": "16.1.5",
+    "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",
     "react": "^19.2.0",
     "react-chessboard": "^5.10.0",
