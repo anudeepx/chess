@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth, signIn, signOut } from "../auth";
-import { createGame, joinGame, listWaitingGames } from "../lib/game-api";
+import { Trash, CirclePlus } from "lucide-react";
+import { createGame, deleteGame, joinGame, listWaitingGames } from "../lib/game-api";
 
 export default async function Home() {
   const session = await auth();
@@ -100,12 +101,24 @@ export default async function Home() {
                     redirect(`/game/${game.id}`);
                   }}
                 >
-                  <button
-                    type="submit"
-                    className="rounded-md border border-emerald-600 px-3 py-1.5 text-sm text-emerald-400"
-                  >
-                    Join game
-                  </button>
+                  <div className="space-x-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        "use server";
+                        await deleteGame(session.user.id, game.id);
+                        redirect("/");
+                      }} 
+                      className="rounded-md border border-red-600 px-2 py-1 text-sm text-red-400">
+                      <Trash className="inline" />
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-md border border-emerald-600 px-2 py-1 text-sm text-emerald-400"
+                    >
+                      <CirclePlus className="inline" />
+                    </button>
+                  </div>
                 </form>
               </div>
             ))

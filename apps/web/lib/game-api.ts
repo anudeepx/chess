@@ -22,10 +22,32 @@ const request = async <T>(
         cache: "no-store",
     });
 
-    const payload = (await response.json()) as { error?: string };
+    const noBodyStatus = response.status === 204 || response.status === 205 || response.status === 304;
+    const contentLength = response.headers.get("content-length");
+    const contentType = response.headers.get("content-type") ?? "";
+
+    let payload: unknown;
+
+    if (!noBodyStatus && contentLength !== "0") {
+        const rawBody = await response.text();
+
+        if (rawBody.trim().length > 0) {
+            payload = contentType.includes("application/json")
+                ? JSON.parse(rawBody)
+                : rawBody;
+        }
+    }
 
     if (!response.ok) {
-        throw new WebAppError(payload.error ?? "Failed request");
+        const errorMessage =
+            typeof payload === "object" &&
+                payload !== null &&
+                "error" in payload &&
+                typeof (payload as { error?: unknown }).error === "string"
+                ? (payload as { error: string }).error
+                : "Failed request";
+
+        throw new WebAppError(errorMessage);
     }
 
     return payload as T;
@@ -53,6 +75,15 @@ export const joinGame = async (userId: string, gameId: string): Promise<GameDto>
     });
 
     return result.game;
+};
+
+export const deleteGame = async (
+    userId: string,
+    gameId: string
+): Promise<void> => {
+    await request<undefined>(`/games/${gameId}`, userId, {
+        method: "DELETE",
+    });
 };
 
 export const getGame = async (

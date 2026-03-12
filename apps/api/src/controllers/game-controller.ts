@@ -28,4 +28,10 @@ export const gameController = {
         const result = await gameService.getGame(gameId);
         res.json(result);
     },
+
+    async deleteGame(req: Request, res: Response) {
+        const { gameId } = gameIdSchema.parse(req.params);
+        await gameService.deleteGame(gameId, req.userId!);
+        res.status(204).send();
+    }
 };

@@ -122,6 +122,24 @@ export const gameService = {
         };
     },
 
+    async deleteGame(gameId: string, userId: string) {
+        const game = await prisma.game.findUnique({ where: { id: gameId } });
+
+        if (!game) {
+            throw new AppError("Game not found", 404);
+        }
+
+        if (game.whitePlayerId !== userId) {
+            throw new AppError("Only the game creator can delete this game", 403);
+        }
+
+        if (game.status === GameStatus.active) {
+            throw new AppError("Cannot delete an active game", 409);
+        }
+
+        await prisma.game.delete({ where: { id: gameId } });
+    },
+
     async makeMove(input: {
         gameId: string;
         userId: string;
