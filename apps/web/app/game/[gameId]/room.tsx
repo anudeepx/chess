@@ -125,6 +125,11 @@ export const GameRoom = ({
       return false;
     }
 
+    // Optimistically update the board so the piece doesn't snap back
+    // while waiting for the server to confirm the move.
+    setFen(chess.fen());
+    setTurn(chess.turn());
+
     socketRef.current?.emit("make_move", {
       gameId,
       userId,

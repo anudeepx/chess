@@ -83,12 +83,12 @@ export const gameService = {
             throw new AppError("Game not found", 404);
         }
 
-        if (game.blackPlayerId && game.blackPlayerId !== userId) {
-            throw new AppError("Game already has two players", 409);
-        }
-
         if (game.whitePlayerId === userId || game.blackPlayerId === userId) {
             return toGameDto(game);
+        }
+
+        if (game.blackPlayerId && game.blackPlayerId !== userId) {
+            throw new AppError("Game already has two players", 409);
         }
 
         const updated = await prisma.game.update({

@@ -1,7 +1,15 @@
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { auth, signIn, signOut } from "../auth";
 import { Trash, CirclePlus } from "lucide-react";
-import { createGame, deleteGame, joinGame, listWaitingGames } from "../lib/game-api";
+import {
+  createGame,
+  deleteGame,
+  joinGame,
+  listWaitingGames,
+} from "../lib/game-api";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const session = await auth();
@@ -64,6 +72,7 @@ export default async function Home() {
           action={async () => {
             "use server";
             const game = await createGame(session.user.id);
+            revalidatePath("/");
             redirect(`/game/${game.id}`);
           }}
         >
@@ -93,33 +102,40 @@ export default async function Home() {
                     Created: {new Date(game.createdAt).toLocaleString()}
                   </p>
                 </div>
-                <form
-                  className="shrink-0"
-                  action={async () => {
-                    "use server";
-                    await joinGame(session.user.id, game.id);
-                    redirect(`/game/${game.id}`);
-                  }}
-                >
-                  <div className="space-x-2">
-                    <button
-                      type="button"
-                      onClick={async () => {
+                <div className="flex shrink-0 gap-2">
+                  {game.whitePlayerId === session.user.id ? (
+                    <form
+                      action={async () => {
                         "use server";
                         await deleteGame(session.user.id, game.id);
+                        revalidatePath("/");
                         redirect("/");
-                      }} 
-                      className="rounded-md border border-red-600 px-2 py-1 text-sm text-red-400">
-                      <Trash className="inline" />
-                    </button>
+                      }}
+                    >
+                      <button
+                        type="submit"
+                        className="rounded-md border border-red-600 px-2 py-1 text-sm text-red-400"
+                      >
+                        <Trash className="inline" />
+                      </button>
+                    </form>
+                  ) : null}
+                  <form
+                    action={async () => {
+                      "use server";
+                      await joinGame(session.user.id, game.id);
+                      revalidatePath("/");
+                      redirect(`/game/${game.id}`);
+                    }}
+                  >
                     <button
                       type="submit"
                       className="rounded-md border border-emerald-600 px-2 py-1 text-sm text-emerald-400"
                     >
                       <CirclePlus className="inline" />
                     </button>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </div>
             ))
           )}
