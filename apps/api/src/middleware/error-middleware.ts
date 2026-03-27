@@ -15,6 +15,8 @@ export const errorMiddleware = (
     res: Response,
     _next: NextFunction,
 ) => {
+    void _next;
+
     if (err instanceof AppError) {
         res.status(err.statusCode).json({ error: err.message });
         return;

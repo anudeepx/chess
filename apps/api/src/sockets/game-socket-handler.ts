@@ -47,11 +47,16 @@ export const registerGameSocketHandlers = (io: ChessServer) => {
             }
         });
 
-        socket.on("make_move", async ({ gameId, userId, from, to, promotion }) => {
+        socket.on("make_move", async ({ gameId, from, to, promotion }) => {
             try {
+                if (!socket.data.userId || socket.data.gameId !== gameId) {
+                    socket.emit("server_error", { message: "Join the game before making moves" });
+                    return;
+                }
+
                 const state = await gameService.makeMove({
                     gameId,
-                    userId,
+                    userId: socket.data.userId,
                     from,
                     to,
                     promotion,

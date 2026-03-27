@@ -91,13 +91,38 @@ export const gameService = {
             throw new AppError("Game already has two players", 409);
         }
 
-        const updated = await prisma.game.update({
-            where: { id: gameId },
+        // Prevent two users from claiming black in a race.
+        const updatedCount = await prisma.game.updateMany({
+            where: {
+                id: gameId,
+                blackPlayerId: null,
+                status: GameStatus.waiting,
+            },
             data: {
                 blackPlayerId: userId,
                 status: GameStatus.active,
             },
         });
+
+        if (updatedCount.count === 0) {
+            const latest = await prisma.game.findUnique({ where: { id: gameId } });
+
+            if (!latest) {
+                throw new AppError("Game not found", 404);
+            }
+
+            if (latest.blackPlayerId === userId) {
+                return toGameDto(latest);
+            }
+
+            throw new AppError("Game already has two players", 409);
+        }
+
+        const updated = await prisma.game.findUnique({ where: { id: gameId } });
+
+        if (!updated) {
+            throw new AppError("Game not found", 404);
+        }
 
         return toGameDto(updated);
     },
@@ -179,22 +204,41 @@ export const gameService = {
 
         const nextStatus = chess.isGameOver() ? GameStatus.finished : GameStatus.active;
 
-        const [updatedGame] = await prisma.$transaction([
-            prisma.game.update({
-                where: { id: game.id },
+        const updatedGame = await prisma.$transaction(async (tx) => {
+            // Ensure we only apply the move if the board state is unchanged
+            // since we validated the move above.
+            const gameUpdate = await tx.game.updateMany({
+                where: {
+                    id: game.id,
+                    fenPosition: game.fenPosition,
+                    status: GameStatus.active,
+                },
                 data: {
                     fenPosition: chess.fen(),
                     status: nextStatus,
                 },
-            }),
-            prisma.move.create({
+            });
+
+            if (gameUpdate.count === 0) {
+                throw new AppError("Game state changed, retry move", 409);
+            }
+
+            await tx.move.create({
                 data: {
                     gameId: game.id,
                     playerId: input.userId,
                     move: result.san,
                 },
-            }),
-        ]);
+            });
+
+            const latestGame = await tx.game.findUnique({ where: { id: game.id } });
+
+            if (!latestGame) {
+                throw new AppError("Game not found", 404);
+            }
+
+            return latestGame;
+        });
 
         return {
             ...toStatePayload(updatedGame),

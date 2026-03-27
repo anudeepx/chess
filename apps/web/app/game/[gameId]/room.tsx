@@ -46,9 +46,12 @@ export const GameRoom = ({
   }, [initialFen]);
 
   useEffect(() => {
-    const socket = io<ServerToClientEvents, ClientToServerEvents>(apiUrl, {
-      transports: ["websocket"],
-    });
+    const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
+      apiUrl,
+      {
+        transports: ["websocket"],
+      },
+    );
 
     socketRef.current = socket;
 
@@ -109,8 +112,18 @@ export const GameRoom = ({
     ((turn === "w" && userId === whitePlayerId) ||
       (turn === "b" && userId === blackPlayerId));
 
-  const onDrop = (sourceSquare: string, targetSquare: string) => {
+  const onDrop = ({
+    sourceSquare,
+    targetSquare,
+  }: {
+    sourceSquare: string;
+    targetSquare: string | null;
+  }) => {
     if (!canMove) {
+      return false;
+    }
+
+    if (!targetSquare) {
       return false;
     }
 
@@ -153,10 +166,12 @@ export const GameRoom = ({
       <div className="grid gap-6 lg:grid-cols-[minmax(320px,640px)_1fr]">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
           <Chessboard
-            id={`board-${gameId}`}
-            position={fen}
-            boardOrientation={playerColor}
-            onPieceDrop={onDrop}
+            options={{
+              id: `board-${gameId}`,
+              position: fen,
+              boardOrientation: playerColor,
+              onPieceDrop: onDrop,
+            }}
           />
         </div>
 
